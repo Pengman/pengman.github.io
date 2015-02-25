@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="utf-8" />
+        <title>blog.pengworld.com</title>
+        <link rel="stylesheet" href="/theme/css/main.css" />
+
+        <!--[if IE]>
+            <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+        <![endif]-->
+</head>
+
+<body id="index" class="home">
+        <header id="banner" class="body">
+                <h1><a href="/">blog.pengworld.com </a></h1>
+                <nav><ul>
+                    <li><a href="/category/devops.html">DevOps</a></li>
+                </ul></nav>
+        </header><!-- /#banner -->
+
+            <aside id="featured" class="body">
+                <article>
+                    <h1 class="entry-title"><a href="/how-to-compile-the-php-plugin-for-pip-installed-uwsgi-on-ubuntu-server-1404-lts.html">How to compile the php plugin for pip installed uwsgi (on ubuntu server 14.04 LTS)</a></h1>
+<footer class="post-info">
+        <abbr class="published" title="2015-02-25T15:00:00+01:00">
+                Published: on 25 februar 2015
+        </abbr>
+
+        <address class="vcard author">
+                By                         <a class="url fn" href="/author/soren-dam-pedersen.html">Søren Dam Pedersen</a>
+        </address>
+<p>In <a href="/category/devops.html">DevOps</a>. </p>
+<p>tags: <a href="/tag/nginx.html">nginx</a> <a href="/tag/ubuntu_server.html">ubuntu_server</a> <a href="/tag/php.html">php</a> </p>
+</footer><!-- /.post-info --><p>I am not a ubuntu server professional, I do not know if the following
+represent current best practice or results in a system that is insecure or
+misconfigured in other ways. I simply report what worked for me. With that
+out of the way&#x2026;</p>
+<p>TLDR:</p>
+<div class="highlight"><pre>sudo apt-get -y --no-upgrade install libphp5-embed libonig-dev libqdbm-dev libxml2-dev libdb-dev libbz2-dev libpcre3-dev libkrb5-dev
+
+cd /tmp/
+wget https://github.com/unbit/uwsgi/archive/$(uwsgi --version).tar.gz
+tar -xvzf $(uwsgi --version).tar.gz
+uwsgi --build-plugin /tmp/uwsgi-$(uwsgi --version)/plugins/php
+sudo mkdir -p /usr/local/lib/uwsgi-$(uwsgi --version)/plugins/
+sudp mv php_plugin.so /usr/local/lib/uwsgi-$(uwsgi --version)/plugins/
+</pre></div>
+
+
+<p>Having installed uwsgi from pip as described elsewhere on the net, I
+needed to find a way to run a php site as well. I wanted to keep my setup
+lean and minimize the amount of processes running, so I decided run it via
+the php plugin for uwsgi. </p>
+<p>Since the version of uwsgi that gets installed via pip, does not include
+the php plugin, it has to be added seperately. The good news is that the
+uwsgi binary has the ability to builds its own plugins, it just needs the
+code to do so. so that is our first step.</p>
+<div class="highlight"><pre>cd /tmp/
+wget https://github.com/unbit/uwsgi/archive/$(uwsgi --version).tar.gz
+tar -xvzf $(uwsgi --version).tar.gz
+</pre></div>
+
+
+<p>We do the work in the <em>tmp</em> folder so we do not clutter elsewhere. I found the
+link for the source download on the uwsgi page and uses wget to download
+it. Then it is extracted. The $(uwsgi &#x2013;version) encantation means we run
+the uwsgi &#x2013;version command, which prints something along the lines of
+2.0.9 and that is the inserted in to the outer command. this ensures that
+if another version of uwsgi gets installed from pip then (hopefully) the
+right sourcecode is downloaded.</p>
+<p>We are now ready to compile a plugin, and to test we can compile the
+simple cgi (common gateway interface) plugin by calling uwsgi
+&#x2013;build-plugin and pointing it at a folder that contains a plugin:</p>
+<div class="highlight"><pre>uwsgi --build-plugin /tmp/uwsgi-$(uwsgi --version)/plugins/cgi
+</pre></div>
+
+
+<p>This produces a cgi<sub>plugin</sub>.so file in the current folder, so all is well.</p>
+<p>If we try this for the php plugin, it will fail because it needs some
+headers that are not installed by default. For me, the way to handle these
+is to simply look at the errors and google the missing headers. In ubuntu
+these headers seems to be placed in the lib*-dev packages. The set that
+worked for me for php was:</p>
+<div class="highlight"><pre>sudo apt-get -y --no-upgrade install libphp5-embed libonig-dev libqdbm-dev libxml2-dev libdb-dev libbz2-dev libpcre3-dev libkrb5-dev
+</pre></div>
+
+
+<p>and the we can produce the compiled php plugin</p>
+<div class="highlight"><pre>uwsgi --build-plugin /tmp/uwsgi-$(uwsgi --version)/plugins/php
+</pre></div>
+
+
+<p>The next step is to figure out where to place this file. The plugin
+directory is configured in the uwsgi file for the site, so it doesn't
+really matter. I chose to to place the php<sub>plugin</sub>.so file in
+<em>usr/local/lib</em> since that seems to be reasonable as far as I can figure
+out.</p>
+<div class="highlight"><pre>sudo mkdir -p /usr/local/lib/uwsgi-$(uwsgi --version)/plugins/
+sudo mv php_plugin.so /usr/local/lib/uwsgi-$(uwsgi --version)/plugins/
+</pre></div>
+
+
+<p>Finally we are ready to run a php site. I have uwsgi hosted behind an
+nginx server so my configs looks as follow:
+nginx<sub>site</sub>.conf, notice the uwsgi<sub>modifier1</sub> parameter which tells uwsgi to
+load the php plugin (its a magic number from various examples)</p>
+<div class="highlight"><pre>  <span class="nt">server</span> <span class="p">{</span>
+    <span class="n">listen</span> <span class="m">8084</span><span class="p">;</span>
+    <span class="n">server_name</span> <span class="n">localhost</span><span class="p">;</span>
+
+    <span class="n">access_log</span> <span class="o">/</span><span class="n">var</span><span class="o">/</span><span class="n">log</span><span class="o">/</span><span class="n">nginx</span><span class="o">/</span><span class="n">phpinfo</span><span class="o">.</span><span class="n">access</span><span class="o">.</span><span class="n">log</span><span class="p">;</span>
+    <span class="n">error_log</span> <span class="o">/</span><span class="n">var</span><span class="o">/</span><span class="n">log</span><span class="o">/</span><span class="n">nginx</span><span class="o">/</span><span class="n">phpinfo</span><span class="o">.</span><span class="n">error</span><span class="o">.</span><span class="n">log</span><span class="p">;</span>
+
+<span class="n">location</span> <span class="o">~</span> <span class="err">\</span><span class="o">.</span><span class="n">php</span><span class="err">$</span> <span class="err">{</span>
+                  <span class="n">include</span>     <span class="n">uwsgi_params</span><span class="p">;</span>
+                  <span class="n">uwsgi_pass</span>  <span class="n">unix</span><span class="o">://</span><span class="n">srv</span><span class="o">/</span><span class="n">www</span><span class="o">/</span><span class="n">phptest</span><span class="o">/</span><span class="n">conf</span><span class="o">/</span><span class="n">socket</span><span class="p">;</span>
+                  <span class="n">uwsgi_modifier1</span> <span class="m">14</span><span class="p">;</span>   
+        <span class="p">}</span>                 
+<span class="err">}</span>
+</pre></div>
+
+
+<p>uwsgi.ini, notice that we set the plugin-dir and the plugin:</p>
+<div class="highlight"><pre><span class="k">[uwsgi]</span>
+<span class="na">socket</span> <span class="o">=</span> <span class="s">/srv/www/phptest/conf/socket</span>
+<span class="na">plugin-dir</span> <span class="o">=</span> <span class="s">/usr/local/lib/uwsgi-2.0.9/plugins/</span>
+<span class="na">plugin</span> <span class="o">=</span> <span class="s">php</span>
+<span class="na">cheaper</span> <span class="o">=</span> <span class="s">1</span>
+<span class="na">processes</span> <span class="o">=</span> <span class="s">4</span>
+<span class="na">php-index</span> <span class="o">=</span> <span class="s">index.php</span>
+</pre></div>
+
+
+<p>These two files get symplinked into the nginx avalable-sites and uwsgi
+vassal folders and then a simple phpinfo file is served.</p>
+<div class="highlight"><pre><span class="cp">&lt;?php</span> <span class="nb">phpinfo</span><span class="p">();</span> <span class="cp">?&gt;</span>
+</pre></div>
+
+
+<p>In my testing it has to be &lt;?php, simply putting &lt;? did not work.</p>                </article>
+<p class="paginator">
+    Page 1 / 1
+</p>
+            </aside><!-- /#featured -->
+        <section id="extras" class="body">
+        </section><!-- /#extras -->
+
+        <footer id="contentinfo" class="body">
+                <address id="about" class="vcard body">
+                Proudly powered by <a href="http://getpelican.com/">Pelican</a>, which takes great advantage of <a href="http://python.org">Python</a>.
+                </address><!-- /#about -->
+
+                <p>The theme is by <a href="http://coding.smashingmagazine.com/2009/08/04/designing-a-html-5-layout-from-scratch/">Smashing Magazine</a>, thanks!</p>
+        </footer><!-- /#contentinfo -->
+
+</body>
+</html>
